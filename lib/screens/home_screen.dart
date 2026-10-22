@@ -858,8 +858,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildPlaylistVideoChoices(AppProvider provider) {
-    const heights = [1080, 720, 480, 360];
+    final heights = AppProvider.playlistHeights;
     final state = provider.playlist;
+    final totals = state.videoTotals;
+    final measuring = state.measureTotal > 0 && state.measuredCount < state.measureTotal;
+
+    String fileSizeFor(int h) {
+      final t = totals[h];
+      if (t != null) return t;
+      if (measuring) {
+        return 'measuring… ${state.measuredCount}/${state.measureTotal}';
+      }
+      return 'best match per video';
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -888,7 +899,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 quality: '${h}p',
                 ext: 'mp4',
                 resolution: 'varies per video',
-                filesize: 'best match per video',
+                filesize: fileSizeFor(h),
                 hasAudio: false,
               ),
               isSelected: state.selectedHeight == '$h',

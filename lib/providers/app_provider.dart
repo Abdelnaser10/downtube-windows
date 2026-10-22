@@ -12,6 +12,13 @@ class PlaylistState {
   final String selectedBitrate; // audio tab batch quality
   final String? error;
 
+  // Measured "total size" for the video tab batch cards
+  // (height -> formatted text). Real bytes summed from every entry's
+  // manifest — same streams the batch would actually download.
+  final Map<int, String> videoTotals;
+  final int measuredCount; // entries measured so far
+  final int measureTotal; // entries to measure (0 = no measurement)
+
   // Batch run
   final bool running;
   final bool finished;
@@ -30,6 +37,9 @@ class PlaylistState {
     this.selectedHeight = '720',
     this.selectedBitrate = '192',
     this.error,
+    this.videoTotals = const {},
+    this.measuredCount = 0,
+    this.measureTotal = 0,
     this.running = false,
     this.finished = false,
     this.wasStopped = false,
@@ -49,6 +59,9 @@ class PlaylistState {
     String? selectedBitrate,
     String? error,
     bool clearError = false,
+    Map<int, String>? videoTotals,
+    int? measuredCount,
+    int? measureTotal,
     bool? running,
     bool? finished,
     bool? wasStopped,
@@ -66,6 +79,9 @@ class PlaylistState {
       selectedHeight: selectedHeight ?? this.selectedHeight,
       selectedBitrate: selectedBitrate ?? this.selectedBitrate,
       error: clearError ? null : (error ?? this.error),
+      videoTotals: videoTotals ?? this.videoTotals,
+      measuredCount: measuredCount ?? this.measuredCount,
+      measureTotal: measureTotal ?? this.measureTotal,
       running: running ?? this.running,
       finished: finished ?? this.finished,
       wasStopped: wasStopped ?? this.wasStopped,
@@ -107,6 +123,11 @@ class AppProvider extends ChangeNotifier {
   PlaylistState _playlist = const PlaylistState();
   PlaylistState get playlist => _playlist;
   final CancelToken _playlistCancelToken = CancelToken();
+  // Bumped on every playlist fetch so background total-size measurements
+  // belonging to a superseded playlist quietly stop reporting.
+  int _measureGen = 0;
+  static const List<int> playlistHeights = [1080, 720, 480, 360];
+  static const int _measureEntriesCap = 300;
 
   // Error
   String? _error;
@@ -142,6 +163,12 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _resetPlaylist({bool isFetching = false}) {
+    ++_measureGen;
+    _playlist = PlaylistState(isFetching: isFetching);
+    notifyListeners();
+  }
+
   // ═══════════════════════════════════════════════════════
   //  FETCH INFO (routes videos vs playlists, like the Android app)
   // ═══════════════════════════════════════════════════════
@@ -160,12 +187,12 @@ class AppProvider extends ChangeNotifier {
       if (playlistId.startsWith('RD')) {
         final isWatch = url.contains('watch?v=') || url.contains('youtu.be/');
         if (isWatch) {
-          _playlist = const PlaylistState();
+          _resetPlaylist();
           notifyListeners();
           return fetchVideoInfo();
         }
         _error = 'YouTube Mixes cannot be downloaded as playlists.';
-        _playlist = const PlaylistState();
+        _resetPlaylist();
         _videoInfo = null;
         notifyListeners();
         return;
@@ -173,7 +200,7 @@ class AppProvider extends ChangeNotifier {
       return _fetchPlaylist();
     }
 
-    _playlist = const PlaylistState();
+    _resetPlaylist();
     notifyListeners();
     return fetchVideoInfo();
   }
@@ -216,20 +243,76 @@ class AppProvider extends ChangeNotifier {
     _videoInfo = null;
     _selectedFormat = null;
     _downloadTask = DownloadTask();
-    _playlist = const PlaylistState(isFetching: true, error: null);
+    _resetPlaylist(isFetching: true);
     notifyListeners();
 
     try {
       final info = await _ytService.fetchPlaylistInfo(_url.trim());
       _playlist = PlaylistState(info: info);
       _error = null;
+      startPlaylistVideoTotals(info.entries);
     } catch (e) {
-      _playlist = const PlaylistState();
+      _resetPlaylist();
       _error = _parseError(e);
     } finally {
       _isFetchingInfo = false;
       notifyListeners();
     }
+  }
+
+  /// Kick off the background measurement behind the video-tab "total size"
+  /// readout. Runs one manifest request per entry through a small pool and
+  /// updates the cards incrementally; never blocks the UI and dies quietly
+  /// when a newer fetch supersedes this playlist.
+  void startPlaylistVideoTotals(List<PlaylistEntry> entries) {
+    if (entries.isEmpty || entries.length > _measureEntriesCap) return;
+    final gen = ++_measureGen;
+
+    // Stream results in: per-height running totals recompute on every
+    // measured entry (entries report every height at once).
+    final heightBytes = <int, int>{};
+    var measured = 0;
+
+    Future<void> run() async {
+      try {
+        await _ytService.measurePlaylistVideoSizes(
+          entries: entries,
+          heights: playlistHeights,
+          onOne: (videoUrl, sizes) {
+            if (gen != _measureGen) return;
+            measured++;
+            sizes.forEach((h, bytes) {
+              heightBytes[h] = (heightBytes[h] ?? 0) + bytes;
+            });
+            _playlist = _playlist.copyWith(
+              videoTotals: {
+                for (final e in heightBytes.entries)
+                  e.key: _formatPlaylistTotal(e.value),
+              },
+              measuredCount: measured,
+              measureTotal: entries.length,
+            );
+            notifyListeners();
+          },
+        );
+        if (gen != _measureGen) return;
+        _playlist = _playlist.copyWith(
+          measuredCount: measured,
+          measureTotal: entries.length,
+        );
+        notifyListeners();
+      } catch (_) {
+        // Measurement is a nice-to-have; the cards keep their fallback text.
+      }
+    }
+
+    run();
+  }
+
+  String _formatPlaylistTotal(int bytes) {
+    final mb = bytes / 1024 / 1024;
+    if (mb >= 1024) return '~${(mb / 1024).toStringAsFixed(2)} GB total';
+    return '~${mb.toStringAsFixed(1)} MB total';
   }
 
   // ═══════════════════════════════════════════════════════

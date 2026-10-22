@@ -11,7 +11,7 @@ YouTube **Video (MP4)** and **MP3** downloader for Windows — native downloads 
 - **Get Qualities, fast** — one lightweight innertube request returns the video metadata **and** every available format (cold ≈ 0.7 s, warm ≈ 0.2 s).
 - **Video: MP4 quality cards with the real file size** on each card (144p → 2160p depending on the video; sizes are measured from the CDN, not guessed).
 - **MP3: four bitrate cards** — 320 / 192 / 128 / 64 kbps, converted through real FFmpeg.
-- **Playlists on both pages** — Video and MP3. Batch downloads run sequentially with per-item progress; **failing videos are skipped and listed at the end**.
+- **Playlists on both pages** — Video and MP3. Batch downloads run sequentially with per-item progress; **failing videos are skipped and listed at the end**. The Video tab cards show the **measured total size of the whole playlist** per quality (real bytes summed from every entry's manifest), live-updating as entries get measured.
 - **Stop keeps finished files** — cancel mid-batch without losing what already completed.
 - **Real titles, unicode intact** — files are named after the actual video title (Arabic, Japanese, emoji …), Windows-safe sanitization only.
 - **Files in public folders** — everything lands in `Downloads\YouTubeDownloader` (selftests/probes excluded). Visible in Explorer immediately.

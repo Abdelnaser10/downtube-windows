@@ -539,6 +539,96 @@ class YouTubeService {
     }
   }
 
+  /// Measure, for each playlist entry, how many bytes every requested height
+  /// would download in a batch — using the exact stream-pick logic of
+  /// [downloadPlaylistVideo] (best mp4 video-only under the height + best
+  /// m4a audio merged, else the best muxed stream at/under the height).
+  ///
+  /// One innertube request per entry, sent through a small worker pool so the
+  /// playlist surface itself stays untouched: [onOne] is called per entry as
+  /// soon as its manifest is measured. Entries whose manifest cannot be
+  /// fetched are simply not reported (their totals stay unmeasured).
+  Future<void> measurePlaylistVideoSizes({
+    required List<PlaylistEntry> entries,
+    required List<int> heights,
+    required void Function(String videoUrl, Map<int, int> bytesPerHeight) onOne,
+    int maxConcurrency = 5,
+  }) async {
+    final useMerge = await hasFfmpeg();
+    var next = 0;
+
+    Future<void> worker() async {
+      while (next < entries.length) {
+        final entry = entries[next++];
+        Map<int, int>? sizes;
+        try {
+          final videoId = VideoId(entry.url).value;
+          final dt = await _innertube.getBundle(videoId);
+          if (dt != null) {
+            sizes = _pickPlaylistBytes(dt.manifest, heights, useMerge);
+          }
+        } catch (_) {
+          // Leave this entry unmeasured; the UI keeps its fallback text.
+        }
+        if (sizes != null && sizes.isNotEmpty) onOne(entry.url, sizes);
+      }
+    }
+
+    await Future.wait(
+        [for (var i = 0; i < maxConcurrency && i < entries.length; i++) worker()]);
+  }
+
+  /// Bytes each height would download for one manifest (batch pick logic).
+  Map<int, int> _pickPlaylistBytes(
+      DtManifest manifest, List<int> heights, bool useMerge) {
+    final out = <int, int>{};
+
+    // Best m4a audio (highest bitrate) — same pick as _downloadMergedPair.
+    final audios = manifest.audioOnly
+        .where((a) => a.container == 'm4a')
+        .toList()
+      ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    if (audios.isEmpty) {
+      audios.addAll(manifest.audioOnly);
+      audios.sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    }
+    final audioLen = audios.isEmpty ? 0 : audios.first.contentLength;
+
+    for (final h in heights) {
+      DtStream? bestVideo;
+      for (final v in manifest.videoOnly) {
+        if (v.container != 'mp4') continue;
+        if (v.height > h) continue;
+        if (bestVideo == null ||
+            v.height > bestVideo.height ||
+            (v.height == bestVideo.height &&
+                v.contentLength > bestVideo.contentLength)) {
+          bestVideo = v;
+        }
+      }
+      if (bestVideo != null && useMerge) {
+        out[h] = bestVideo.contentLength + audioLen;
+        continue;
+      }
+
+      // Fallback path mirrors the muxed selection in downloadPlaylistVideo.
+      DtStream? muxedBest;
+      for (final m in manifest.muxed) {
+        if (m.height > h) continue;
+        if (muxedBest == null || m.height > muxedBest.height) muxedBest = m;
+      }
+      if (muxedBest == null) {
+        final all = manifest.muxed.toList();
+        if (all.isNotEmpty) {
+          all.sort((a, b) => a.height.compareTo(b.height));
+          muxedBest = all.last;
+        }
+      }
+      if (muxedBest != null) out[h] = muxedBest.contentLength;
+    }
+    return out;
+  }
+
   /// Download one playlist entry as a video at most [maxHeight] high.
   Future<String> downloadPlaylistVideo({
     required String url,
