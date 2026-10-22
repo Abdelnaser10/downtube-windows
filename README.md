@@ -2,7 +2,7 @@
 
 YouTube **Video (MP4)** and **MP3** downloader for Windows — native downloads with real FFmpeg merging, **no server, no Python, no yt-dlp process**. Pure Flutter/Dart desktop app.
 
-> The Android sibling app lives at [Abdelnaser10/youtube-downloader](https://github.com/Abdelnaser10/youtube-downloader).
+> The Android sibling app lives at [Abdelnaser10/downtube-android](https://github.com/Abdelnaser10/downtube-android).
 
 ---
 
