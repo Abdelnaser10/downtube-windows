@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/video_info.dart';
 import '../models/download_task.dart';
 import '../models/playlist_info.dart';
@@ -136,6 +137,50 @@ class AppProvider extends ChangeNotifier {
   // Downloaded file path
   String? _downloadedFilePath;
   String? get downloadedFilePath => _downloadedFilePath;
+
+  // "Save to folder" (LocalSend-style). null = platform default.
+  String? _customSaveDir;
+  String? get customSaveDir => _customSaveDir;
+  String _saveDirDisplay = '';
+  String get saveDirDisplay => _saveDirDisplay;
+
+  /// Load the persisted folder choice at app start.
+  Future<void> loadSavedFolder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('save_dir');
+      if (saved != null && saved.isNotEmpty) _customSaveDir = saved;
+      _ytService.setCustomSaveDir(_customSaveDir);
+      await _refreshSaveDirDisplay();
+    } catch (_) {
+      // Preferences unavailable — default folder keeps working.
+    }
+  }
+
+  /// Apply a folder picked in the UI. Pass '' to return to the default.
+  Future<void> setSaveFolder(String? pickedPath) async {
+    final p = pickedPath?.trim() ?? '';
+    _customSaveDir = p.isEmpty ? null : p;
+    _ytService.setCustomSaveDir(_customSaveDir);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_customSaveDir == null) {
+        await prefs.remove('save_dir');
+      } else {
+        await prefs.setString('save_dir', _customSaveDir!);
+      }
+    } catch (_) {}
+    await _refreshSaveDirDisplay();
+  }
+
+  Future<void> _refreshSaveDirDisplay() async {
+    try {
+      _saveDirDisplay = await _ytService.currentSaveDirPath();
+    } catch (_) {
+      _saveDirDisplay = _customSaveDir ?? '';
+    }
+    notifyListeners();
+  }
 
   void setUrl(String url) {
     _url = url;

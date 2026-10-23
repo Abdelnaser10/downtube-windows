@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/download_task.dart';
@@ -102,6 +103,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       body: Column(
         children: [
           _buildTopBar(),
+          _buildSaveFolderRow(),
           Expanded(child: _buildBody()),
         ],
       ),
@@ -235,13 +237,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ? const Color(0xFF667EEA)
                         : Colors.grey.shade500),
                 const SizedBox(width: 12),
-                Text(label,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.grey.shade400,
-                      fontSize: 14,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
-                    )),
+                Expanded(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : Colors.grey.shade400,
+                        fontSize: 14,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.normal,
+                      )),
+                ),
               ],
             ),
           ),
@@ -257,6 +265,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Column(
       children: [
         _buildTopBar(),
+        _buildSaveFolderRow(),
         Expanded(child: _buildBody()),
       ],
     );
@@ -361,6 +370,79 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           );
         },
       ),
+    );
+  }
+
+  /// LocalSend-style "Save to folder" strip under the top bar (desktop only).
+  /// Tap Change → native folder picker; a ✕ shows when a custom folder is in
+  /// use to restore the platform default.
+  Widget _buildSaveFolderRow() {
+    if (!_isDesktop) return const SizedBox.shrink();
+    return Consumer<AppProvider>(
+      builder: (context, provider, _) {
+        final custom =
+            provider.customSaveDir != null && provider.customSaveDir!.isNotEmpty;
+        final display = provider.saveDirDisplay;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(32, 10, 32, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141427),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF2A2A4A)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.folder_rounded,
+                  color: Color(0xFF48BB78), size: 18),
+              const SizedBox(width: 10),
+              const Text('Save to folder',
+                  style: TextStyle(
+                      color: Color(0xFFB8B8CC),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500)),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Tooltip(
+                  message: display.isEmpty ? '' : display,
+                  child: Text(
+                    display.isEmpty
+                        ? '…'
+                        : display + (custom ? '' : '  (default)'),
+                    style: const TextStyle(
+                        color: Color(0xFF888899), fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ),
+              if (custom)
+                IconButton(
+                  tooltip: 'Restore default Downloads folder',
+                  icon: const Icon(Icons.restart_alt_rounded,
+                      size: 16, color: Color(0xFF888899)),
+                  onPressed: () => provider.setSaveFolder(''),
+                ),
+              TextButton.icon(
+                onPressed: () async {
+                  final picked = await getDirectoryPath();
+                  if (picked != null) await provider.setSaveFolder(picked);
+                },
+                icon: const Icon(Icons.edit_location_alt_rounded, size: 15),
+                label: const Text('Change',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF667EEA),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 32),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

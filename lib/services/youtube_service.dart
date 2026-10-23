@@ -28,6 +28,18 @@ class YouTubeService {
   final _innertube = InnertubeManifestClient();
   String? _ffmpegPath;
 
+  /// User-chosen save folder (Windows/desktop; null = platform default).
+  /// Downloads land directly in this folder — no extra subfolder appended.
+  String? _customSaveDir;
+  void setCustomSaveDir(String? path) {
+    _customSaveDir =
+        (path == null || path.trim().isEmpty) ? null : path.trim();
+  }
+
+  /// The directory the next download would actually use (resolves the
+  /// custom folder when set, creating it if needed).
+  Future<String> currentSaveDirPath() => _getDownloadsDir();
+
   /// Last fetched bundle (metadata + manifest). Reused so the download tap
   /// right after "Get Qualities" — and the info fetch itself when a quality
   /// was already probed — needs no further network round-trips. Media URLs
@@ -1045,6 +1057,19 @@ class YouTubeService {
 
   /// Get the appropriate downloads directory for the current platform
   Future<String> _getDownloadsDir() async {
+    // User-picked folder wins (LocalSend-style "Save to folder").
+    final custom = _customSaveDir;
+    if (custom != null && custom.isNotEmpty) {
+      try {
+        final dir = Directory(custom);
+        if (!await dir.exists()) await dir.create(recursive: true);
+        return dir.path;
+      } catch (_) {
+        // Unusable choice (removed drive, no permission) — default wins.
+        _customSaveDir = null;
+      }
+    }
+
     if (Platform.isAndroid) {
       // Use external storage Downloads folder on Android
       final dir = Directory('/storage/emulated/0/Download/YouTubeDownloader');

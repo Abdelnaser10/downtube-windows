@@ -9,8 +9,10 @@ import 'services/youtube_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  final provider = AppProvider();
+  provider.loadSavedFolder(); // not awaited — folder row fills in when ready
   _runSelfTestIfRequested();
-  runApp(const MyApp());
+  runApp(MyApp(provider: provider));
 }
 
 /// Headless verification mode, used during development/release checks:
@@ -75,13 +77,15 @@ Future<void> _runSelfTestIfRequested() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.provider});
+
+  final AppProvider provider;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AppProvider()),
+        ChangeNotifierProvider.value(value: provider),
       ],
       child: MaterialApp(
         title: 'DownTube',

@@ -25,6 +25,7 @@ dependencies:
       url: https://github.com/elias001011/youtube_explode_dart.git
       ref: fix/playlist-lockup-view-model
   permission_handler: ^11.3.0
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:
