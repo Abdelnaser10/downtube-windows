@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:downtube/screens/settings_screen.dart' show kAppVersion;
 import 'package:downtube/providers/app_provider.dart';
 import 'package:downtube/screens/home_screen.dart';
 
@@ -25,6 +26,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('DownTube'), findsWidgets);
+    expect(find.text('Save to folder'), findsOneWidget);
+    expect(find.text('Change'), findsOneWidget);
+
+    // Settings tab: swap the content and back must still work.
+    await tester.tap(find.text('Settings'));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Save to folder'), findsOneWidget);
+    expect(find.text('Version $kAppVersion'), findsNothing);
+    expect(find.textContaining('Version $kAppVersion'), findsOneWidget);
+
+    await tester.tap(find.text('Video Download'));
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Save to folder'), findsOneWidget);
     expect(find.text('Change'), findsOneWidget);
   });

@@ -9,6 +9,7 @@ import '../widgets/audio_card.dart';
 import '../widgets/progress_bar.dart';
 import '../models/playlist_info.dart';
 import '../models/video_info.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -100,13 +101,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
       ),
-      body: Column(
-        children: [
-          _buildTopBar(),
-          _buildSaveFolderRow(),
-          Expanded(child: _buildBody()),
-        ],
-      ),
+      body: _selectedTab == 2
+          ? const SettingsScreen()
+          : Column(
+              children: [
+                _buildTopBar(),
+                _buildSaveFolderRow(),
+                Expanded(child: _buildBody()),
+              ],
+            ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Color(0xFF141427),
@@ -130,6 +133,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             BottomNavigationBarItem(
               icon: Icon(Icons.music_note_rounded),
               label: 'MP3',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_rounded),
+              label: 'Settings',
             ),
           ],
         ),
@@ -202,6 +209,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             onTap: () => setState(() => _selectedTab = 1),
           ),
           const Spacer(),
+          _sidebarItem(
+            icon: Icons.settings_rounded,
+            label: 'Settings',
+            isSelected: _selectedTab == 2,
+            onTap: () => setState(() => _selectedTab = 2),
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -262,6 +276,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   //  MAIN CONTENT (shared between desktop + mobile)
   // ═══════════════════════════════════════════════════════════════
   Widget _buildMainContent() {
+    if (_selectedTab == 2) {
+      // Settings tab — replaces top bar + folder strip + body entirely.
+      return const SettingsScreen();
+    }
     return Column(
       children: [
         _buildTopBar(),
